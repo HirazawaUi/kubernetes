@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	cmdutil "k8s.io/kubectl/pkg/cmd/util"
+	"k8s.io/kubernetes/test/utils"
 )
 
 func newRedFederalCowHammerConfig() clientcmdapi.Config {
@@ -52,7 +53,7 @@ func Example_view() {
 		expectedConfig: expectedConfig,
 	}
 
-	output := test.run(nil)
+	output := test.run(&testing.T{})
 	fmt.Printf("%v", output)
 	// Output:
 	// apiVersion: v1
@@ -261,7 +262,7 @@ func TestAdditionalAuth(t *testing.T) {
 
 func TestEmbedClientCert(t *testing.T) {
 	fakeCertFile, _ := os.CreateTemp(os.TempDir(), "")
-	defer os.Remove(fakeCertFile.Name())
+	defer utils.RemoveTestFile(t, fakeCertFile)
 	fakeData := []byte("fake-data")
 	os.WriteFile(fakeCertFile.Name(), fakeData, 0600)
 	expectedConfig := newRedFederalCowHammerConfig()
@@ -280,7 +281,7 @@ func TestEmbedClientCert(t *testing.T) {
 
 func TestEmbedClientKey(t *testing.T) {
 	fakeKeyFile, _ := os.CreateTemp(os.TempDir(), "")
-	defer os.Remove(fakeKeyFile.Name())
+	defer utils.RemoveTestFile(t, fakeKeyFile)
 	fakeData := []byte("fake-data")
 	os.WriteFile(fakeKeyFile.Name(), fakeData, 0600)
 	expectedConfig := newRedFederalCowHammerConfig()
@@ -326,7 +327,7 @@ func TestEmbedNoKeyOrCertDisallowed(t *testing.T) {
 
 func TestEmptyTokenAndCertAllowed(t *testing.T) {
 	fakeCertFile, _ := os.CreateTemp(os.TempDir(), "cert-file")
-	defer os.Remove(fakeCertFile.Name())
+	defer utils.RemoveTestFile(t, fakeCertFile)
 	expectedConfig := newRedFederalCowHammerConfig()
 	authInfo := clientcmdapi.NewAuthInfo()
 	authInfo.ClientCertificate = path.Base(fakeCertFile.Name())
@@ -569,7 +570,7 @@ func TestUnsetBytes(t *testing.T) {
 
 func TestCAClearsInsecure(t *testing.T) {
 	fakeCAFile, _ := os.CreateTemp(os.TempDir(), "ca-file")
-	defer os.Remove(fakeCAFile.Name())
+	defer utils.RemoveTestFile(t, fakeCAFile)
 	clusterInfoWithInsecure := clientcmdapi.NewCluster()
 	clusterInfoWithInsecure.InsecureSkipTLSVerify = true
 
@@ -638,7 +639,7 @@ func TestInsecureClearsCA(t *testing.T) {
 
 func TestCADataClearsCA(t *testing.T) {
 	fakeCAFile, _ := os.CreateTemp(os.TempDir(), "")
-	defer os.Remove(fakeCAFile.Name())
+	defer utils.RemoveTestFile(t, fakeCAFile)
 	fakeData := []byte("cadata")
 	os.WriteFile(fakeCAFile.Name(), fakeData, 0600)
 
@@ -852,7 +853,7 @@ func TestToBool(t *testing.T) {
 
 func testConfigCommand(args []string, startingConfig clientcmdapi.Config, t *testing.T) (string, clientcmdapi.Config) {
 	fakeKubeFile, _ := os.CreateTemp(os.TempDir(), "")
-	defer os.Remove(fakeKubeFile.Name())
+	defer utils.RemoveTestFile(t, fakeKubeFile)
 	err := clientcmd.WriteToFile(startingConfig, fakeKubeFile.Name())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

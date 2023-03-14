@@ -17,6 +17,7 @@ limitations under the License.
 package config
 
 import (
+	"k8s.io/kubernetes/test/utils"
 	"os"
 	"testing"
 
@@ -297,7 +298,8 @@ func (test viewClusterTest) run(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer os.Remove(fakeKubeFile.Name())
+	defer utils.RemoveTestFile(t, fakeKubeFile)
+
 	err = clientcmd.WriteToFile(test.config, fakeKubeFile.Name())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

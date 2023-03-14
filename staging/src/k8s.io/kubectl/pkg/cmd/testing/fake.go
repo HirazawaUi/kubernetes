@@ -480,6 +480,8 @@ func (f *TestFactory) Cleanup() {
 		return
 	}
 
+	f.tempConfigFile.Close()
+
 	os.Remove(f.tempConfigFile.Name())
 }
 

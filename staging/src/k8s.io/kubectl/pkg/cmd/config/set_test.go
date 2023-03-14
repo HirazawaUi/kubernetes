@@ -18,6 +18,7 @@ package config
 
 import (
 	"bytes"
+	"k8s.io/kubernetes/test/utils"
 	"os"
 	"testing"
 
@@ -58,7 +59,8 @@ func (test setConfigTest) run(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer os.Remove(fakeKubeFile.Name())
+	defer utils.RemoveTestFile(t, fakeKubeFile)
+
 	err = clientcmd.WriteToFile(test.config, fakeKubeFile.Name())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
