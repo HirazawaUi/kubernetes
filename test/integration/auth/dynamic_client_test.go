@@ -18,6 +18,7 @@ package auth
 
 import (
 	"context"
+	utiltesting "k8s.io/client-go/util/testing"
 	"os"
 	"testing"
 	"time"
@@ -37,7 +38,8 @@ func TestDynamicClientBuilder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create temp file failed: %v", err)
 	}
-	defer os.RemoveAll(tmpfile.Name())
+
+	defer utiltesting.RemoveTestFile(t, tmpfile)
 
 	if err = os.WriteFile(tmpfile.Name(), []byte(ecdsaPrivateKey), 0666); err != nil {
 		t.Fatalf("write file %s failed: %v", tmpfile.Name(), err)

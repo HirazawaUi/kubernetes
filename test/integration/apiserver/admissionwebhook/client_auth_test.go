@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	utiltesting "k8s.io/client-go/util/testing"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -87,7 +88,8 @@ func testWebhookClientAuth(t *testing.T, enableAggregatorRouting bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(kubeConfigFile.Name())
+
+	defer utiltesting.RemoveTestFile(t, kubeConfigFile)
 
 	if err := os.WriteFile(kubeConfigFile.Name(), []byte(`
 apiVersion: v1
@@ -113,7 +115,8 @@ users:
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(admissionConfigFile.Name())
+
+	defer utiltesting.RemoveTestFile(t, admissionConfigFile)
 
 	if err := os.WriteFile(admissionConfigFile.Name(), []byte(`
 apiVersion: apiserver.k8s.io/v1alpha1
