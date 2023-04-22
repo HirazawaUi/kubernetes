@@ -18,6 +18,7 @@ package config
 
 import (
 	"bytes"
+	utiltesting "k8s.io/client-go/util/testing"
 	"os"
 	"testing"
 
@@ -186,7 +187,8 @@ func (test setClusterTest) run(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defer os.Remove(fakeKubeFile.Name())
+	defer utiltesting.CloseAndRemove(t, fakeKubeFile)
+
 	err = clientcmd.WriteToFile(test.config, fakeKubeFile.Name())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
