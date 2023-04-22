@@ -25,6 +25,8 @@ import (
 	"reflect"
 	"testing"
 
+	utiltesting "k8s.io/client-go/util/testing"
+
 	certificatesv1 "k8s.io/api/certificates/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -324,8 +326,9 @@ users:
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(f.Name())
-	os.WriteFile(f.Name(), testData, os.FileMode(0755))
+	defer utiltesting.CloseAndRemove(t, f)
+
+	f.Write(testData)
 
 	config, err := loadRESTClientConfig(f.Name())
 	if err != nil {
