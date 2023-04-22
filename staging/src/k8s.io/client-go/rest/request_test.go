@@ -323,12 +323,12 @@ func TestRequestBody(t *testing.T) {
 	}
 
 	// test error set when failing to read file
-	f, err := os.CreateTemp("", "test")
+	f, err := os.CreateTemp("", "")
 	if err != nil {
 		t.Fatalf("unable to create temp file")
 	}
-	defer f.Close()
-	os.Remove(f.Name())
+	defer utiltesting.CloseAndRemove(t, f)
+
 	r = (&Request{}).Body(f.Name())
 	if r.err == nil || r.body != nil {
 		t.Errorf("should have set err and left body nil: %#v", r)
