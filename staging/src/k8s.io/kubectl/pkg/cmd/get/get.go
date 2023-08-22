@@ -473,6 +473,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 	if o.IgnoreNotFound {
 		r.IgnoreErrors(apierrors.IsNotFound)
 	}
+
 	if err := r.Err(); err != nil {
 		return err
 	}
@@ -484,9 +485,14 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 	allErrs := []error{}
 	errs := sets.NewString()
 	infos, err := r.Infos()
+
+	if apierrors.IsNotFound(err) {
+		err = fmt.Errorf("%w in namespace %s", err, o.Namespace)
+	}
 	if err != nil {
 		allErrs = append(allErrs, err)
 	}
+
 	printWithKind := multipleGVKsRequested(infos)
 
 	objs := make([]runtime.Object, len(infos))
@@ -567,6 +573,7 @@ func (o *GetOptions) Run(f cmdutil.Factory, args []string) error {
 			fmt.Fprintln(o.ErrOut, "No resources found")
 		}
 	}
+
 	return utilerrors.NewAggregate(allErrs)
 }
 
