@@ -611,6 +611,38 @@ var _ = SIGDescribe(framework.WithNodeConformance(), "Containers Lifecycle", fun
 			err = e2epod.WaitForPodNotFoundInNamespace(context.TODO(), f.ClientSet, pod.Name, pod.Namespace, time.Duration(gracePeriod+bufferSeconds)*time.Second)
 			framework.ExpectNoError(err)
 		})
+
+		f.It("should respect force deletion with long-running preStop hook", f.WithNodeConformance(), func() {
+			client := e2epod.NewPodClient(f)
+			gracePeriod := int64(30)
+
+			ginkgo.By("creating a pod with a termination grace period seconds and long-running preStop hook")
+			pod := testPod("pod-termination-grace-period", gracePeriod)
+			pod.Spec.Containers[0].Lifecycle = &v1.Lifecycle{
+				PreStop: &v1.LifecycleHandler{
+					Exec: &v1.ExecAction{
+						Command: []string{
+							"sleep",
+							"10000",
+						},
+					},
+				},
+			}
+			pod = client.Create(context.TODO(), pod)
+
+			ginkgo.By("ensuring the pod is running")
+			err := e2epod.WaitForPodRunningInNamespace(context.TODO(), f.ClientSet, pod)
+			framework.ExpectNoError(err)
+
+			ginkgo.By("force deletion of the pod, and set GracePeriodSeconds to 0.")
+			zeroGracePeriodSeconds := int64(0)
+			err = client.Delete(context.TODO(), pod.Name, metav1.DeleteOptions{GracePeriodSeconds: &zeroGracePeriodSeconds})
+			framework.ExpectNoError(err)
+
+			ginkgo.By("ensure that the pod terminated immediately")
+			err = e2epod.WaitForPodNotFoundInNamespace(context.TODO(), f.ClientSet, pod.Name, pod.Namespace, time.Duration(2)*time.Second)
+			framework.ExpectNoError(err)
+		})
 	})
 
 	ginkgo.It("should call the container's preStop hook and terminate it if its startup probe fails", func() {

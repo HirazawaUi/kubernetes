@@ -744,7 +744,9 @@ func (m *kubeGenericRuntimeManager) killContainer(ctx context.Context, pod *v1.P
 	}
 	m.recordContainerEvent(pod, containerSpec, containerID.ID, v1.EventTypeNormal, events.KillingContainer, message)
 
-	if gracePeriodOverride != nil {
+	// When the value of gracePeriod is 0, it means that we want to force the pod to be deleted, and set GracePeriodSeconds to 0,
+	// at this time we should not overwrite its value with gracePeriodOverride.
+	if gracePeriodOverride != nil && gracePeriod != 0 {
 		gracePeriod = *gracePeriodOverride
 		klog.V(3).InfoS("Killing container with a grace period override", "pod", klog.KObj(pod), "podUID", pod.UID,
 			"containerName", containerName, "containerID", containerID.String(), "gracePeriod", gracePeriod)
