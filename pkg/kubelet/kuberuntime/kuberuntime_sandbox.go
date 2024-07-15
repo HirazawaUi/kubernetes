@@ -108,6 +108,11 @@ func (m *kubeGenericRuntimeManager) generatePodSandboxConfig(pod *v1.Pod, attemp
 		if err != nil {
 			return nil, err
 		}
+
+		if pod.Spec.ActualPodHostname != "" {
+			podHostname = pod.Spec.ActualPodHostname
+		}
+
 		podSandboxConfig.Hostname = podHostname
 	}
 

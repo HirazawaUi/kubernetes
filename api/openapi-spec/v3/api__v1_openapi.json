@@ -5402,6 +5402,9 @@
             "format": "int64",
             "type": "integer"
           },
+          "actualPodHostname": {
+            "type": "string"
+          },
           "affinity": {
             "allOf": [
               {

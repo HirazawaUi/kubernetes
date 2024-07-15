@@ -320,7 +320,7 @@ func CreateConfig(
 			}
 		}
 	}
-
+	
 	clientCAProvider, err := opts.Authentication.ClientCert.GetClientCAContentProvider()
 	if err != nil {
 		return nil, nil, err

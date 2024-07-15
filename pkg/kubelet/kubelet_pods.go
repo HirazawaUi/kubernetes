@@ -563,6 +563,11 @@ func (kl *Kubelet) GeneratePodHostNameAndDomain(pod *v1.Pod) (string, string, er
 		hostDomain = fmt.Sprintf("%s.%s.svc.%s", pod.Spec.Subdomain, pod.Namespace, clusterDomain)
 	}
 
+	if pod.Spec.ActualPodHostname != "" {
+		hostDomain = pod.Spec.ActualPodHostname
+		hostDomain = pod.Spec.ActualPodHostname
+	}
+
 	return hostname, hostDomain, nil
 }
 

@@ -9487,6 +9487,9 @@
           "format": "int64",
           "type": "integer"
         },
+        "actualPodHostname": {
+          "type": "string"
+        },
         "affinity": {
           "$ref": "#/definitions/io.k8s.api.core.v1.Affinity",
           "description": "If specified, the pod's scheduling constraints"
