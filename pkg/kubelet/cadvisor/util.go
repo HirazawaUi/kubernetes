@@ -23,7 +23,9 @@ import (
 	cadvisorapi2 "github.com/google/cadvisor/info/v2"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"k8s.io/kubernetes/pkg/features"
 )
 
 const (
@@ -73,5 +75,8 @@ func EphemeralStorageCapacityFromFsInfo(info cadvisorapi2.FsInfo) v1.ResourceLis
 // be removed. Related issue:
 // https://github.com/kubernetes/kubernetes/issues/51798
 func UsingLegacyCadvisorStats(runtimeEndpoint string) bool {
+	if utilfeature.DefaultFeatureGate.Enabled(features.PodAndContainerStatsFromCRI) {
+		return true
+	}
 	return strings.HasSuffix(runtimeEndpoint, CrioSocketSuffix)
 }
