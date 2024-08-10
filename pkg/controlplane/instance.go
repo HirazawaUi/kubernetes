@@ -167,6 +167,8 @@ type Extra struct {
 	// RepairServicesInterval interval used by the repair loops for
 	// the Services NodePort and ClusterIP resources
 	RepairServicesInterval time.Duration
+
+	ClusterDomain string
 }
 
 // Config defines configuration for the master
@@ -377,6 +379,7 @@ func (c CompletedConfig) New(delegationTarget genericapiserver.DelegationTarget)
 
 func (c CompletedConfig) StorageProviders(discovery clientdiscovery.DiscoveryInterface) ([]controlplaneapiserver.RESTStorageProvider, error) {
 	legacyRESTStorageProvider, err := corerest.New(corerest.Config{
+		ClusterDomain: c.Extra.ClusterDomain,
 		GenericConfig: *c.ControlPlane.NewCoreGenericConfig(),
 		Proxy: corerest.ProxyConfig{
 			Transport:           c.ControlPlane.Extra.ProxyTransport,

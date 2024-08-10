@@ -234,6 +234,7 @@ func CreateKubeAPIServerConfig(
 
 			EndpointReconcilerType: reconcilers.Type(opts.EndpointReconcilerType),
 			MasterCount:            opts.MasterCount,
+			ClusterDomain:          opts.Extra.ClusterDomain,
 		},
 	}
 

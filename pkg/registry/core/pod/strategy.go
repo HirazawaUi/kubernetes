@@ -58,6 +58,7 @@ import (
 type podStrategy struct {
 	runtime.ObjectTyper
 	names.NameGenerator
+	//ClusterDomain string
 }
 
 // Strategy is the default logic that applies when creating and updating Pod

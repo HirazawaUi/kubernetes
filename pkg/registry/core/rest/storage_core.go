@@ -69,8 +69,9 @@ import (
 type Config struct {
 	GenericConfig
 
-	Proxy    ProxyConfig
-	Services ServicesConfig
+	Proxy         ProxyConfig
+	Services      ServicesConfig
+	ClusterDomain string
 }
 
 type ProxyConfig struct {
@@ -193,6 +194,7 @@ func (p *legacyProvider) NewRESTStorage(apiResourceConfigSource serverstorage.AP
 		nodeStorage.KubeletConnectionInfo,
 		p.Proxy.Transport,
 		podDisruptionClient,
+		p.ClusterDomain,
 	)
 	if err != nil {
 		return genericapiserver.APIGroupInfo{}, err

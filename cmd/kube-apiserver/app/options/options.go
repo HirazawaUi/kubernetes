@@ -61,6 +61,8 @@ type Extra struct {
 	EndpointReconcilerType string
 
 	MasterCount int
+
+	ClusterDomain string
 }
 
 // NewServerRunOptions creates and returns ServerRunOptions according to the given featureGate and effectiveVersion of the server binary to run.
@@ -123,6 +125,8 @@ func (s *ServerRunOptions) Flags() (fss cliflag.NamedFlagSets) {
 	fs.StringVar(&s.ServiceClusterIPRanges, "service-cluster-ip-range", s.ServiceClusterIPRanges, ""+
 		"A CIDR notation IP range from which to assign service cluster IPs. This must not "+
 		"overlap with any IP ranges assigned to nodes or pods. Max of two dual-stack CIDRs is allowed.")
+
+	fs.StringVar(&s.ClusterDomain, "cluster-domain", s.ClusterDomain, "cluster domain")
 
 	fs.Var(&s.ServiceNodePortRange, "service-node-port-range", ""+
 		"A port range to reserve for services with NodePort visibility.  This must not overlap with the ephemeral port range on nodes.  "+

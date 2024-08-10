@@ -65,11 +65,11 @@ type PodStorage struct {
 type REST struct {
 	*genericregistry.Store
 	proxyTransport http.RoundTripper
+	clusterDomain  string
 }
 
 // NewStorage returns a RESTStorage object that will work against pods.
-func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGetter, proxyTransport http.RoundTripper, podDisruptionBudgetClient policyclient.PodDisruptionBudgetsGetter) (PodStorage, error) {
-
+func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGetter, proxyTransport http.RoundTripper, podDisruptionBudgetClient policyclient.PodDisruptionBudgetsGetter, clusterDomain string) (PodStorage, error) {
 	store := &genericregistry.Store{
 		NewFunc:                   func() runtime.Object { return &api.Pod{} },
 		NewListFunc:               func() runtime.Object { return &api.PodList{} },
@@ -95,6 +95,11 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGet
 		return PodStorage{}, err
 	}
 
+	podRest := &REST{
+		store, proxyTransport, clusterDomain,
+	}
+
+	store.BeginCreate = podRest.beginCreate
 	statusStore := *store
 	statusStore.UpdateStrategy = registrypod.StatusStrategy
 	statusStore.ResetFieldsStrategy = registrypod.StatusStrategy
@@ -103,7 +108,7 @@ func NewStorage(optsGetter generic.RESTOptionsGetter, k client.ConnectionInfoGet
 
 	bindingREST := &BindingREST{store: store}
 	return PodStorage{
-		Pod:                 &REST{store, proxyTransport},
+		Pod:                 podRest,
 		Binding:             &BindingREST{store: store},
 		LegacyBinding:       &LegacyBindingREST{bindingREST},
 		Eviction:            newEvictionStorage(&statusStore, podDisruptionBudgetClient),
@@ -123,6 +128,23 @@ var _ = rest.Redirector(&REST{})
 // ResourceLocation returns a pods location from its HostIP
 func (r *REST) ResourceLocation(ctx context.Context, name string) (*url.URL, http.RoundTripper, error) {
 	return registrypod.ResourceLocation(ctx, r, r.proxyTransport, name)
+}
+
+func (r *REST) beginCreate(ctx context.Context, obj runtime.Object, options *metav1.CreateOptions) (genericregistry.FinishFunc, error) {
+	pod := obj.(*api.Pod)
+
+	if pod.Spec.ActualPodHostname == "" {
+		if pod.Spec.SetHostnameAsFQDN != nil && *pod.Spec.SetHostnameAsFQDN {
+			pod.Spec.ActualPodHostname = fmt.Sprintf("%s.svc.%s", pod.Spec.Hostname, pod.Namespace, r.clusterDomain)
+		} else {
+			pod.Spec.ActualPodHostname = pod.Spec.Hostname
+		}
+	}
+
+	// Our cleanup callback
+	finish := func(_ context.Context, success bool) {}
+
+	return finish, nil
 }
 
 // Implement ShortNamesProvider
