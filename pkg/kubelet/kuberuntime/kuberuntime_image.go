@@ -18,6 +18,8 @@ package kuberuntime
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -43,6 +45,20 @@ func (m *kubeGenericRuntimeManager) PullImage(ctx context.Context, image kubecon
 	if err != nil {
 		return "", err
 	}
+
+	go func(ctx context.Context) {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("Context was cancelled, exiting goroutine.")
+				return
+			default:
+				// 可以在这里执行其他操作
+				fmt.Println("Goroutine is running...")
+				time.Sleep(500 * time.Millisecond)
+			}
+		}
+	}(ctx)
 
 	imgSpec := toRuntimeAPIImageSpec(image)
 

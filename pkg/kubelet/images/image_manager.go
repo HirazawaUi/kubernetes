@@ -155,6 +155,13 @@ func (m *imageManager) EnsureImageExists(ctx context.Context, objRef *v1.ObjectR
 	pullChan := make(chan pullResult)
 	m.puller.pullImage(ctx, spec, pullSecrets, pullChan, podSandboxConfig)
 	imagePullResult := <-pullChan
+	select {
+	case <-ctx.Done():
+		fmt.Println("终止拉取镜像请求")
+		return
+	default:
+		// do nothing
+	}
 	if imagePullResult.err != nil {
 		m.logIt(objRef, v1.EventTypeWarning, events.FailedToPullImage, logPrefix, fmt.Sprintf("Failed to pull image %q: %v", imgRef, imagePullResult.err), klog.Warning)
 		m.backOff.Next(backOffKey, m.backOff.Clock.Now())

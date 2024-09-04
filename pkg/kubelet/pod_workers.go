@@ -1131,8 +1131,13 @@ func (p *podWorkers) startPodSync(podUID types.UID) (ctx context.Context, update
 	default:
 	}
 
+	if status.ctx == nil {
+		status.ctx, status.cancelFn = context.WithCancel(context.Background())
+		status.ctx = context.WithValue(status.ctx, "key", "value")
+	}
+
 	// initialize a context for the worker if one does not exist
-	if status.ctx == nil || status.ctx.Err() == context.Canceled {
+	if status.ctx.Err() == context.Canceled {
 		status.ctx, status.cancelFn = context.WithCancel(context.Background())
 	}
 	ctx = status.ctx
