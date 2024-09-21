@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -683,8 +682,6 @@ type podStartVerifier struct {
 	completeDuration     time.Duration
 }
 
-var reBug88766 = regexp.MustCompile(`rootfs_linux.*kubernetes\.io~(secret|projected).*no such file or directory`)
-
 // Verify takes successive watch events for a given pod and returns an error if the status is unexpected.
 // This verifier works for any pod which has 0 init containers and 1 regular container.
 func (v *podStartVerifier) Verify(event watch.Event) error {
@@ -762,10 +759,6 @@ func (v *podStartVerifier) Verify(event watch.Event) error {
 		case t.ExitCode == 1:
 			// expected
 		case t.ExitCode == 137 && (t.Reason == "ContainerStatusUnknown" || t.Reason == "Error"):
-			// expected, pod was force-killed after grace period
-		case t.ExitCode == 128 && (t.Reason == "StartError" || t.Reason == "ContainerCannotRun") && reBug88766.MatchString(t.Message):
-			// pod volume teardown races with container start in CRI, which reports a failure
-			framework.Logf("pod %s on node %s failed with the symptoms of https://github.com/kubernetes/kubernetes/issues/88766", pod.Name, pod.Spec.NodeName)
 		default:
 			data, _ := json.MarshalIndent(pod.Status, "", "  ")
 			framework.Logf("pod %s on node %s had incorrect final status:\n%s", pod.Name, pod.Spec.NodeName, string(data))
