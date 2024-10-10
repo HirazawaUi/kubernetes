@@ -275,15 +275,21 @@ func applyKubeletConfigPatchFromFile(kubeletBytes []byte, patchFilePath string, 
 		return nil, err
 	}
 
+	// Always convert the target data to JSON.
+	patchedData, err := yaml.YAMLToJSON(patchBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	// Define the patch target.
 	patchTarget := &patches.PatchTarget{
 		Name:                      patches.KubeletConfiguration,
 		StrategicMergePatchObject: kubeletconfig.KubeletConfiguration{},
-		Data:                      kubeletBytes,
+		Data:                      patchedData,
 	}
 
 	// Apply the strategic patch.
-	patchedData, err := patches.ApplyStrategicMergePatch(patchTarget.Data, patchBytes, patchTarget.StrategicMergePatchObject, output)
+	patchedData, err = patches.ApplyStrategicMergePatch(patchTarget.Data, patchBytes, patchTarget.StrategicMergePatchObject, output)
 	if err != nil {
 		return nil, err
 	}
