@@ -28,6 +28,7 @@ import (
 	"k8s.io/kubernetes/cmd/kubeadm/app/cmd/phases/workflow"
 	"k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/features"
+	"k8s.io/kubernetes/cmd/kubeadm/app/phases/kubelet"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/apiclient"
 	dryrunutil "k8s.io/kubernetes/cmd/kubeadm/app/util/dryrun"
 	staticpodutil "k8s.io/kubernetes/cmd/kubeadm/app/util/staticpod"
@@ -80,7 +81,8 @@ func runWaitControlPlanePhase(c workflow.RunData) error {
 	}
 	if err = waiter.WaitForControlPlaneComponents(pods,
 		data.Cfg().ControlPlane.LocalAPIEndpoint.AdvertiseAddress); err != nil {
-		return err
+		kubelet.PrintKubeletErrorHelpScreen(data.OutputWriter(), data.Cfg().NodeRegistration.CRISocket, true)
+		return errors.Wrap(err, "failed while waiting for the control plane to start")
 	}
 
 	return nil

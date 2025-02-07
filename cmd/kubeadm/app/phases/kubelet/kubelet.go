@@ -18,11 +18,34 @@ package kubelet
 
 import (
 	"fmt"
+	"io"
+	"text/template"
 
+	"github.com/lithammer/dedent"
 	"k8s.io/klog/v2"
 
 	kubeadmconstants "k8s.io/kubernetes/cmd/kubeadm/app/constants"
 	"k8s.io/kubernetes/cmd/kubeadm/app/util/initsystem"
+)
+
+var (
+	kubeletFailMsg = dedent.Dedent(`
+	Unfortunately, an error has occurred, likely caused by:
+		- The kubelet is not running
+		- The kubelet is unhealthy due to a misconfiguration of the node in some way (required cgroups disabled)
+
+	If you are on a systemd-powered system, you can try to troubleshoot the error with the following commands:
+		- 'systemctl status kubelet'
+		- 'journalctl -xeu kubelet'`)
+
+	controlPlaneFailTempl = template.Must(template.New("init").Parse(dedent.Dedent(`
+	Additionally, a control plane component may have crashed or exited when started by the container runtime.
+	To troubleshoot, list all containers using your preferred container runtimes CLI.
+	Here is one example how you may list all running Kubernetes containers by using crictl:
+		- 'crictl --runtime-endpoint {{ .Socket }} ps -a | grep kube | grep -v pause'
+		Once you have found the failing container, you can inspect its logs with:
+		- 'crictl --runtime-endpoint {{ .Socket }} logs CONTAINERID'
+`)))
 )
 
 // TryStartKubelet attempts to bring up kubelet service
@@ -43,6 +66,21 @@ func TryStartKubelet() {
 		klog.Warningf("[kubelet-start] WARNING: unable to start the kubelet service: [%v]\n", err)
 		fmt.Printf("[kubelet-start] Please ensure kubelet is reloaded and running manually.\n")
 	}
+}
+
+// PrintKubeletErrorHelpScreen prints help text on kubelet errors.
+func PrintKubeletErrorHelpScreen(outputWriter io.Writer, criSocket string, waitControlPlaneComponents bool) {
+	context := struct {
+		Socket string
+	}{
+		Socket: criSocket,
+	}
+
+	fmt.Fprintln(outputWriter, kubeletFailMsg)
+	if waitControlPlaneComponents {
+		_ = controlPlaneFailTempl.Execute(outputWriter, context)
+	}
+	fmt.Println("")
 }
 
 // TryStopKubelet attempts to bring down the kubelet service momentarily
