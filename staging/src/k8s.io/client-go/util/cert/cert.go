@@ -107,7 +107,13 @@ func GenerateSelfSignedCertKey(host string, alternateIPs []net.IP, alternateDNS 
 // Certs/keys not existing in that directory are created.
 func GenerateSelfSignedCertKeyWithFixtures(host string, alternateIPs []net.IP, alternateDNS []string, fixtureDirectory string) ([]byte, []byte, error) {
 	validFrom := time.Now().Add(-time.Hour) // valid an hour earlier to avoid flakes due to clock skew
-	maxAge := time.Hour * 24 * 365          // one year self-signed certs
+
+	// The kubernetes is supported by the Kubernetes community for a standard period of 12 months and two-month maintenance mode period.
+	// To ensure certificate validity covers the entire supported lifecycle,
+	// we set the expiration duration to 14 months (12 + 2).
+	// ref: https://kubernetes.io/releases/patch-releases/#support-period.
+	now := time.Now()
+	maxAge := now.AddDate(0, 14, 0).Sub(now)
 
 	baseName := fmt.Sprintf("%s_%s_%s", host, strings.Join(ipsToStrings(alternateIPs), "-"), strings.Join(alternateDNS, "-"))
 	certFixturePath := filepath.Join(fixtureDirectory, baseName+".crt")
