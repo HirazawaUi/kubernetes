@@ -79,11 +79,10 @@ type GenericPLEG struct {
 	// Mutex to serialize updateCache called by relist vs UpdateCache interface
 	podCacheMutex sync.Mutex
 	// logger is used for contextual logging
-	logger klog.Logger
-	// watchConditions tracks pod watch conditions, guarded by watchConditionsLock
-	// watchConditions is a map of pod UID -> condition key -> condition
-	watchConditions     map[types.UID]map[string]versionedWatchCondition
-	watchConditionsLock sync.Mutex
+	logger                    klog.Logger
+	podsToTriggerLock         sync.Mutex
+	podsToTriggerConditionMet map[types.UID]bool
+	triggerQueues             map[types.UID][]chan struct{}
 }
 
 type versionedWatchCondition struct {
@@ -135,14 +134,15 @@ func NewGenericPLEG(logger klog.Logger, runtime kubecontainer.Runtime, eventChan
 		panic("cache cannot be nil")
 	}
 	return &GenericPLEG{
-		logger:          logger,
-		relistDuration:  relistDuration,
-		runtime:         runtime,
-		eventChannel:    eventChannel,
-		podRecords:      make(podRecords),
-		cache:           cache,
-		clock:           clock,
-		watchConditions: make(map[types.UID]map[string]versionedWatchCondition),
+		logger:                    logger,
+		relistDuration:            relistDuration,
+		runtime:                   runtime,
+		eventChannel:              eventChannel,
+		podRecords:                make(podRecords),
+		cache:                     cache,
+		clock:                     clock,
+		podsToTriggerConditionMet: make(map[types.UID]bool),
+		triggerQueues:             make(map[types.UID][]chan struct{}),
 	}
 }
 
@@ -279,10 +279,9 @@ func (g *GenericPLEG) Relist() {
 			events = append(events, containerEvents...)
 		}
 
-		watchConditions := g.getPodWatchConditions(pid)
 		_, reinspect := g.podsToReinspect[pid]
 
-		if len(events) == 0 && len(watchConditions) == 0 && !reinspect {
+		if len(events) == 0 && !g.podsToTriggerConditionMet[pid] && !reinspect {
 			// Nothing else needed for this pod.
 			continue
 		}
@@ -311,19 +310,10 @@ func (g *GenericPLEG) Relist() {
 			}
 		}
 
-		var completedConditions []versionedWatchCondition
-		for _, condition := range watchConditions {
-			if condition.condition(status) {
-				// condition was met: add it to the list of completed conditions.
-				completedConditions = append(completedConditions, condition)
-			}
-		}
-		if len(completedConditions) > 0 {
-			g.completeWatchConditions(pid, completedConditions)
-			// If at least 1 condition completed, emit a ConditionMet event to trigger a pod sync.
-			// We only emit 1 event even if multiple conditions are met, since SyncPod reevaluates
-			// all containers in the pod with the latest status.
+		// Check the simplified trigger
+		if g.podsToTriggerConditionMet[pid] {
 			events = append(events, &PodLifecycleEvent{ID: pid, Type: ConditionMet})
+			g.SetPodTriggerConditionMet(pid, false) // Clear the flag
 		}
 
 		// Update the internal storage and send out the events.
@@ -488,85 +478,65 @@ func (g *GenericPLEG) updateCache(ctx context.Context, pod *kubecontainer.Pod, p
 	return status, g.cache.Set(pod.ID, status, err, timestamp), err
 }
 
-// SetPodWatchCondition flags the pod for reinspection on every Relist iteration until the watch
-// condition is met. The condition is keyed so it can be updated before the condition
-// is met.
-func (g *GenericPLEG) SetPodWatchCondition(podUID types.UID, conditionKey string, condition WatchCondition) {
-	g.watchConditionsLock.Lock()
-	defer g.watchConditionsLock.Unlock()
+func (g *GenericPLEG) SetPodTriggerConditionMet(podUID types.UID, trigger bool) {
+	g.podsToTriggerLock.Lock()
+	defer g.podsToTriggerLock.Unlock()
 
-	conditions, ok := g.watchConditions[podUID]
-	if !ok {
-		conditions = make(map[string]versionedWatchCondition)
-	}
+	if trigger {
+		// If the current value is already true, join the waiting queue
+		if _, ok := g.podsToTriggerConditionMet[podUID]; ok && g.podsToTriggerConditionMet[podUID] {
+			// Initialize the queue (if necessary)
+			if g.triggerQueues == nil {
+				g.triggerQueues = make(map[types.UID][]chan struct{})
+			}
+			if _, exists := g.triggerQueues[podUID]; !exists {
+				g.triggerQueues[podUID] = make([]chan struct{}, 0)
+			}
 
-	versioned, found := conditions[conditionKey]
-	if found {
-		// Watch condition was already set. Increment its version & update the condition function.
-		versioned.version++
-		versioned.condition = condition
-		conditions[conditionKey] = versioned
+			// Create a new wait channel and add it to the queue
+			waitCh := make(chan struct{})
+			g.triggerQueues[podUID] = append(g.triggerQueues[podUID], waitCh)
+
+			// Start goroutine and wait
+			go func() {
+				<-waitCh // Wait for notification
+				g.podsToTriggerLock.Lock()
+				g.podsToTriggerConditionMet[podUID] = true
+				g.podsToTriggerLock.Unlock()
+			}()
+			return
+		}
+
+		g.podsToTriggerConditionMet[podUID] = true
 	} else {
-		conditions[conditionKey] = versionedWatchCondition{
-			key:       conditionKey,
-			condition: condition,
+		delete(g.podsToTriggerConditionMet, podUID)
+
+		// Handle the wait queue
+		if queues, exists := g.triggerQueues[podUID]; exists && len(queues) > 0 {
+			// Take the first waiter in the queue and notify the
+			waitCh := queues[0]
+			g.triggerQueues[podUID] = queues[1:]
+
+			// If the queue is empty, clean it up
+			if len(g.triggerQueues[podUID]) == 0 {
+				delete(g.triggerQueues, podUID)
+			}
+
+			// Notify the waiting goroutine
+			close(waitCh)
 		}
 	}
-
-	g.watchConditions[podUID] = conditions
-}
-
-// getPodWatchConditions returns a list of the active watch conditions for the pod.
-func (g *GenericPLEG) getPodWatchConditions(podUID types.UID) []versionedWatchCondition {
-	g.watchConditionsLock.Lock()
-	defer g.watchConditionsLock.Unlock()
-
-	podConditions, ok := g.watchConditions[podUID]
-	if !ok {
-		return nil
-	}
-
-	// Flatten the map into a list of conditions. This also serves to create a copy, so the lock can
-	// be released.
-	conditions := make([]versionedWatchCondition, 0, len(podConditions))
-	for _, condition := range podConditions {
-		conditions = append(conditions, condition)
-	}
-	return conditions
-}
-
-// completeWatchConditions removes the completed watch conditions, unless they have been updated
-// since the condition was checked.
-func (g *GenericPLEG) completeWatchConditions(podUID types.UID, completedConditions []versionedWatchCondition) {
-	g.watchConditionsLock.Lock()
-	defer g.watchConditionsLock.Unlock()
-
-	conditions, ok := g.watchConditions[podUID]
-	if !ok {
-		// Pod was deleted, nothing to do.
-		return
-	}
-
-	for _, completed := range completedConditions {
-		condition := conditions[completed.key]
-		// Only clear the condition if it has not been updated.
-		if condition.version == completed.version {
-			delete(conditions, completed.key)
-		}
-	}
-	g.watchConditions[podUID] = conditions
 }
 
 // cleanupOrphanedWatchConditions purges the watchConditions map of any pods that were removed from
 // the pod records. Events are not emitted for removed pods.
 func (g *GenericPLEG) cleanupOrphanedWatchConditions() {
-	g.watchConditionsLock.Lock()
-	defer g.watchConditionsLock.Unlock()
+	g.podsToTriggerLock.Lock()
+	defer g.podsToTriggerLock.Unlock()
 
-	for podUID := range g.watchConditions {
+	for podUID := range g.podsToTriggerConditionMet {
 		if g.podRecords.getCurrent(podUID) == nil {
-			// Pod was deleted, remove it from the watch conditions.
-			delete(g.watchConditions, podUID)
+			delete(g.podsToTriggerConditionMet, podUID)
 		}
 	}
 }
