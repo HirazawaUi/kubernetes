@@ -86,6 +86,11 @@ var _ kubecontainer.StreamingRuntime = &FakeStreamingRuntime{}
 // FakeRuntime should implement Runtime.
 var _ kubecontainer.Runtime = &FakeRuntime{}
 
+func (f *FakeRuntime) GeneratePodEvents(ctx context.Context, ID string) (*runtimeapi.ContainerEventResponse, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 type FakeVersion struct {
 	Version string
 }
