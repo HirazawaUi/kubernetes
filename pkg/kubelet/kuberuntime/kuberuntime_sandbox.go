@@ -298,6 +298,56 @@ func (m *kubeGenericRuntimeManager) getKubeletSandboxes(ctx context.Context, all
 	return resp, nil
 }
 
+// GeneratePodEvents retrieves event information for a specified Pod, including Pod sandbox status and container statuses.
+func (m *kubeGenericRuntimeManager) GeneratePodEvents(ctx context.Context, ID string) (*runtimeapi.ContainerEventResponse, error) {
+	// List pod sandboxes with the specified ID
+	resp, err := m.runtimeService.ListPodSandbox(ctx, &runtimeapi.PodSandboxFilter{
+		Id: ID,
+	})
+	if err != nil {
+		klog.ErrorS(err, "Failed to list pod sandboxes")
+		return nil, err
+	}
+
+	// Get the first pod sandbox from the response
+	podSandbox := resp[0]
+
+	// Retrieve the pod sandbox status
+	podStatus, err := m.runtimeService.PodSandboxStatus(ctx, podSandbox.Id, true)
+	if err != nil {
+		return nil, fmt.Errorf("get pod status failed: %v", err)
+	}
+
+	// List all containers in the pod sandbox
+	containers, err := m.runtimeService.ListContainers(ctx, &runtimeapi.ContainerFilter{
+		PodSandboxId: podSandbox.Id,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list container failed: %v", err)
+	}
+
+	// Collect status information for each container
+	var containerStatuses []*runtimeapi.ContainerStatus
+	for _, container := range containers {
+		status, err := m.runtimeService.ContainerStatus(context.TODO(), container.GetId(), true)
+		if err != nil {
+			fmt.Println("Error getting container status:", err)
+			continue
+		}
+		containerStatuses = append(containerStatuses, status.Status)
+	}
+
+	// Construct the container event response
+	eventResp := &runtimeapi.ContainerEventResponse{
+		ContainerId:        podSandbox.Id,
+		CreatedAt:          podSandbox.CreatedAt,
+		PodSandboxStatus:   podStatus.Status,
+		ContainersStatuses: containerStatuses,
+	}
+
+	return eventResp, nil
+}
+
 // determinePodSandboxIP determines the IP addresses of the given pod sandbox.
 func (m *kubeGenericRuntimeManager) determinePodSandboxIPs(podNamespace, podName string, podSandbox *runtimeapi.PodSandboxStatus) []string {
 	podIPs := make([]string, 0)

@@ -85,6 +85,8 @@ type EventedPLEG struct {
 	runningMu sync.Mutex
 	// logger is used for contextual logging
 	logger klog.Logger
+
+	containerEventsResponseCh chan *runtimeapi.ContainerEventResponse
 }
 
 // NewEventedPLEG instantiates a new EventedPLEG object and return it.
@@ -105,6 +107,7 @@ func NewEventedPLEG(logger klog.Logger, runtime kubecontainer.Runtime, runtimeSe
 		relistDuration:              relistDuration,
 		clock:                       clock,
 		logger:                      logger,
+		containerEventsResponseCh:   make(chan *runtimeapi.ContainerEventResponse),
 	}, nil
 }
 
@@ -177,9 +180,6 @@ func (e *EventedPLEG) Healthy() (bool, error) {
 }
 
 func (e *EventedPLEG) watchEventsChannel() {
-	containerEventsResponseCh := make(chan *runtimeapi.ContainerEventResponse, cap(e.eventChannel))
-	defer close(containerEventsResponseCh)
-
 	// Get the container events from the runtime.
 	go func() {
 		numAttempts := 0
@@ -196,7 +196,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 				}
 			}
 
-			err := e.runtimeService.GetContainerEvents(context.Background(), containerEventsResponseCh, func(runtimeapi.RuntimeService_GetContainerEventsClient) {
+			err := e.runtimeService.GetContainerEvents(context.Background(), e.containerEventsResponseCh, func(runtimeapi.RuntimeService_GetContainerEventsClient) {
 				metrics.EventedPLEGConn.Inc()
 			})
 			if err != nil {
@@ -209,7 +209,7 @@ func (e *EventedPLEG) watchEventsChannel() {
 	}()
 
 	if isEventedPLEGInUse() {
-		e.processCRIEvents(containerEventsResponseCh)
+		e.processCRIEvents(e.containerEventsResponseCh)
 	}
 }
 
@@ -428,5 +428,29 @@ func (e *EventedPLEG) updateLatencyMetric(event *runtimeapi.ContainerEventRespon
 }
 
 func (e *EventedPLEG) RequestPodReSync(podUID types.UID, trigger bool) {
-	e.genericPleg.RequestPodReSync(podUID, trigger)
+	ctx := context.TODO()
+	event, err := e.runtime.GeneratePodEvents(ctx, string(podUID))
+	if err != nil {
+		e.logger.Error(err, "list pod failed")
+	}
+
+	status, err := e.runtime.GeneratePodStatus(event)
+	if err != nil {
+		// nolint:logcheck // Not using the result of klog.V inside the
+		// if branch is okay, we just use it to determine whether the
+		// additional "podStatus" key and its value should be added.
+		if klog.V(6).Enabled() {
+			e.logger.Error(err, "Evented PLEG: error generating pod status from the received event", "podUID", podUID, "podStatus", status)
+		} else {
+			e.logger.Error(err, "Evented PLEG: error generating pod status from the received event", "podUID", podUID)
+		}
+	}
+
+	e.updateRunningPodMetric(status)
+	e.updateRunningContainerMetric(status)
+	e.updateLatencyMetric(event)
+
+	e.cache.Set(podUID, status, err, time.Unix(0, event.GetCreatedAt()))
+
+	e.sendPodLifecycleEvent(&PodLifecycleEvent{ID: types.UID(event.PodSandboxStatus.Metadata.Uid), Type: PodSync, Data: event.ContainerId})
 }
