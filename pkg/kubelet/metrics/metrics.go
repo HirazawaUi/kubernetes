@@ -379,6 +379,24 @@ var (
 		},
 	)
 
+	EventedPLEGPodFailure = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           "evented_pleg_pod_failure_count",
+			Help:           "The number of pods that failed using evented pleg.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
+	EventedPLEGPodStatusError = metrics.NewCounter(
+		&metrics.CounterOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           "evented_pleg_pod_error_count",
+			Help:           "The number of pods status that error using evented pleg.",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	// EventedPLEGConn is a Counter that tracks the number of times a streaming client
 	// was obtained to receive CRI Events.
 	EventedPLEGConn = metrics.NewCounter(
@@ -1109,6 +1127,8 @@ func Register(collectors ...metrics.StableCollector) {
 		legacyregistry.MustRegister(PLEGRelistInterval)
 		legacyregistry.MustRegister(PLEGLastSeen)
 		legacyregistry.MustRegister(EventedPLEGConnErr)
+		legacyregistry.MustRegister(EventedPLEGPodFailure)
+		legacyregistry.MustRegister(EventedPLEGPodStatusError)
 		legacyregistry.MustRegister(EventedPLEGConn)
 		legacyregistry.MustRegister(EventedPLEGConnLatency)
 		legacyregistry.MustRegister(RuntimeOperations)

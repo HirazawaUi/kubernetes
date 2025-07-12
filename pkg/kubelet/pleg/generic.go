@@ -481,6 +481,34 @@ func (g *GenericPLEG) updateCache(ctx context.Context, pod *kubecontainer.Pod, p
 		timestamp = status.TimeStamp
 	}
 
+	oldStatus, err := g.cache.Get(pod.ID)
+	if err != nil {
+		metrics.EventedPLEGPodStatusError.Inc()
+	}
+	modified := false
+	if oldStatus != nil && status != nil {
+		for _, oldSandboxStatus := range oldStatus.SandboxStatuses {
+			for _, sandboxStatus := range status.SandboxStatuses {
+				if oldSandboxStatus.Id == sandboxStatus.Id && oldSandboxStatus.State != sandboxStatus.State {
+					modified = true
+				}
+			}
+		}
+
+		for _, oldContainerStatuses := range oldStatus.ContainerStatuses {
+			for _, containerStatuses := range status.ContainerStatuses {
+				if containerStatuses.ID == oldContainerStatuses.ID && oldContainerStatuses.State != containerStatuses.State {
+					modified = true
+				}
+			}
+		}
+
+		if modified && timestamp.Sub(oldStatus.TimeStamp) > time.Second*3 {
+			g.logger.V(2).Info("DEBUG: The container missed the event from the evented pleg and needs the generic pleg to rescue", "pod", klog.KRef(pod.Namespace, pod.Name), "oldStatus", oldStatus, "newStatus", status)
+			metrics.EventedPLEGPodFailure.Inc()
+		}
+	}
+
 	return status, g.cache.Set(pod.ID, status, err, timestamp), err
 }
 
