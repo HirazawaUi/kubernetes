@@ -22,6 +22,7 @@ import (
 	"net/url"
 	"runtime"
 	"sort"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 	kubetypes "k8s.io/apimachinery/pkg/types"
@@ -29,6 +30,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubelet/pkg/types"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
+	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	runtimeutil "k8s.io/kubernetes/pkg/kubelet/kuberuntime/util"
 	"k8s.io/kubernetes/pkg/kubelet/util"
 	"k8s.io/kubernetes/pkg/kubelet/util/format"
@@ -37,6 +39,9 @@ import (
 
 // createPodSandbox creates a pod sandbox and returns (podSandBoxID, message, error).
 func (m *kubeGenericRuntimeManager) createPodSandbox(ctx context.Context, pod *v1.Pod, attempt uint32) (string, string, error) {
+	defer func(start time.Time) {
+		metrics.KubeRuntimeOperationsLatency.WithLabelValues("create_pod_sandbox").Observe(time.Since(start).Seconds())
+	}(time.Now())
 	logger := klog.FromContext(ctx)
 	podSandboxConfig, err := m.generatePodSandboxConfig(ctx, pod, attempt)
 	if err != nil {

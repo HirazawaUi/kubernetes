@@ -54,6 +54,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/cm"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
 	"k8s.io/kubernetes/pkg/kubelet/events"
+	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	proberesults "k8s.io/kubernetes/pkg/kubelet/prober/results"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	kubeutil "k8s.io/kubernetes/pkg/kubelet/util"
@@ -273,7 +274,9 @@ func (m *kubeGenericRuntimeManager) startContainer(ctx context.Context, podSandb
 		return s.Message(), ErrPreCreateHook
 	}
 
+	start := time.Now()
 	containerID, err := m.runtimeService.CreateContainer(ctx, podSandboxID, containerConfig, podSandboxConfig)
+	metrics.KubeRuntimeOperationsLatency.WithLabelValues("create_container").Observe(time.Since(start).Seconds())
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
 		m.recordContainerEvent(ctx, pod, container, containerID, v1.EventTypeWarning, events.FailedToCreateContainer, "Error: %v", s.Message())
@@ -288,7 +291,9 @@ func (m *kubeGenericRuntimeManager) startContainer(ctx context.Context, podSandb
 	m.recordContainerEvent(ctx, pod, container, containerID, v1.EventTypeNormal, events.CreatedContainer, "Container created")
 
 	// Step 3: start the container.
+	start = time.Now()
 	err = m.runtimeService.StartContainer(ctx, containerID)
+	metrics.KubeRuntimeOperationsLatency.WithLabelValues("start_container").Observe(time.Since(start).Seconds())
 	if err != nil {
 		s, _ := grpcstatus.FromError(err)
 		m.recordContainerEvent(ctx, pod, container, containerID, v1.EventTypeWarning, events.FailedToStartContainer, "Error: %v", s.Message())

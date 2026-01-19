@@ -1193,6 +1193,19 @@ var (
 		},
 		[]string{"retry_trigger"},
 	)
+
+	// KubeRuntimeOperationsLatency is a Histogram that tracks the latency (in seconds) for kuberuntime operations.
+	// Broken down by operation type.
+	KubeRuntimeOperationsLatency = metrics.NewHistogramVec(
+		&metrics.HistogramOpts{
+			Subsystem:      KubeletSubsystem,
+			Name:           "kuberuntime_operations_latency_seconds",
+			Help:           "Latency in seconds of kuberuntime operations. Broken down by operation type.",
+			Buckets:        metrics.DefBuckets,
+			StabilityLevel: metrics.ALPHA,
+		},
+		[]string{"operation_type"},
+	)
 )
 
 var registerMetrics sync.Once
@@ -1311,6 +1324,7 @@ func Register() {
 			legacyregistry.MustRegister(PodInProgressResizes)
 			legacyregistry.MustRegister(PodDeferredAcceptedResizes)
 		}
+		legacyregistry.MustRegister(KubeRuntimeOperationsLatency)
 	})
 }
 
